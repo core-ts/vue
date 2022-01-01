@@ -3,7 +3,7 @@ import VueRouter from 'vue-router';
 import {Route} from 'vue-router';
 
 export function navigate($router: VueRouter, stateTo: string, params = null) {
-  const objParams = params != null ? '/'.concat(params.join('/')) : '';
+  const objParams = params != null ? '/'.concat((params as any).join('/')) : '';
   $router.push({path: stateTo.concat(objParams)});
 }
 

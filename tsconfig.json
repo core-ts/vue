@@ -6,6 +6,8 @@
     "outDir": "./lib",
     "module": "commonjs",
     "moduleResolution": "node",
+    "strict": true,
+    "strictNullChecks": true,
     "pretty": true,
     "sourceMap": false,
     "declaration": false,

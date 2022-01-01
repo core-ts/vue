@@ -8,28 +8,25 @@
     "build:lib": "tsc",
     "clean:lib": "rimraf lib"
   },
+  "dependencies": {
+    "query-string": "^6.13.1",
+    "reflectx": "^0.0.9",
+    "search-core": "^0.1.1",
+    "vue": "2.6.12",
+    "vue-class-component": "7.2.5",
+    "vue-property-decorator": "9.0.0",
+    "vue-router": "3.4.3"
+  },
   "devDependencies": {
     "tslint": "5.10.0",
     "typescript": "^3.3.3333"
-  },
-  "peerDependencies": {
-    "form-util": "^0.0.5",
-    "query-string": "^6.13.1",
-    "metadata-x": "^0.0.4",
-    "model-formatter": "^0.0.4",
-    "reflectx": "^0.0.9",
-    "search-utilities": "^0.0.5",
-    "vue": "^2.6.12",
-    "vue-class-component": "^7.2.5",
-    "vue-property-decorator": "^9.0.0",
-    "vue-router": "^3.4.3"
   },
   "publishConfig": {
     "registry": "https://registry.npmjs.org/"
   },
   "repository": {
     "type": "git",
-    "url": "git@github.com/common-ts/vue-onex"
+    "url": "git@github.com/core-ts/vue"
   },
   "keywords": [
     "vue-onex"

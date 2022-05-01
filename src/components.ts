@@ -1,10 +1,11 @@
-import { Vue } from "vue-class-component";
-import { Attributes, createEditStatus, DiffApprService, EditStatusConfig, error, Filter, getModelName, handleToggle, LoadingService, Locale, message, messageByHttpStatus, MetaModel, ResourceService, SearchParameter, SearchResult, SearchService, StringMap, UIService, ViewService } from './core';
-// import {formatDiffModel} from './diff';
+import { Vue } from 'vue-class-component';
+import { createDiffStatus } from '.';
+import { Attributes, createEditStatus, EditStatusConfig, DiffApprService, DiffParameter, DiffStatusConfig, error, Filter, getModelName, handleToggle, hideLoading, LoadingService, Locale, message, messageByHttpStatus, MetaModel, ResourceService, SearchParameter, SearchResult, SearchService, showLoading, StringMap, UIService, ViewContainerRef, ViewParameter, ViewService } from './core';
+import { formatDiffModel, showDiff } from './diff';
 import { build, createModel, EditParameter, GenericService, handleStatus, handleVersion, ResultInfo } from './edit';
 import { format, json } from './formatter';
 import { focusFirstError, readOnly } from './formutil';
-import { getConfirmFunc, getEditStatusFunc, getErrorFunc, getLoadingFunc, getLocaleFunc, getMsgFunc, getResource, getUIService } from './input';
+import { getConfirmFunc, getDiffStatusFunc, getEditStatusFunc, getErrorFunc, getLoadingFunc, getLocaleFunc, getMsgFunc, getResource, getUIService } from './input';
 import { clone, makeDiff, trim, setValue } from './reflect';
 import { addParametersIntoUrl, append, buildMessage, changePage, changePageSize, formatResults, getFields, handleSortEvent, initFilter, mergeFilter, more, optimizeFilter, reset, showPaging } from './search';
 
@@ -20,131 +21,188 @@ export const enLocale = {
   'currencySymbol': '$',
   'currencyPattern': 0
 };
-// export class ViewComponent<T, ID> extends Vue {
-//   protected service: ViewService<T, ID>;
-//   name?: string;
-//   resource: any = {};
-//   running = false;
-//   protected form: any;
-//   protected ui: UIService;
-//   protected loading?: LoadingService;
-//   protected resourceService?: ResourceService;
-//   protected showError: (m: string, title?: string, detail?: string, callback?: () => void) => void;
+export class ViewComponent<T, ID> extends Vue {
+  protected name?: string;
+  protected loading?: LoadingService;
+  protected showError: (msg: string, title?: string, detail?: string, callback?: () => void) => void;
+  protected loadData?: (id: ID, ctx?: any) => Promise<T | null | undefined>;
+  // protected service?: ViewService<T, ID>;
+  protected keys?: string[];
+  getLocale?: (profile?: string) => Locale;
+  resource: StringMap = {} as any;
+  protected running?: boolean;
+  protected form?: HTMLFormElement;
+  constructor(sv: ((id: ID, ctx?: any) => Promise<T>) | ViewService<T, ID>,
+      param: ResourceService | ViewParameter,
+      showError?: (msg: string, title?: string, detail?: string, callback?: () => void) => void,
+      getLocale?: (profile?: string) => Locale,
+      loading?: LoadingService, ignoreDate?: boolean) {
+    super();
+    const resourceService = getResource(param);
+    this.getLocale = getLocaleFunc(param, getLocale);
+    this.showError = getErrorFunc(param, showError);
+    this.loading = getLoadingFunc(param, loading);
+    if (sv) {
+      if (typeof sv === 'function') {
+        this.loadData = sv;
+      } else {
+        this.loadData = sv.load;
+        if (sv.metadata) {
+          const m = sv.metadata();
+          if (m) {
+            // this.metadata = m;
+            const meta = build(m, ignoreDate);
+            this.keys = meta.keys;
+          }
+        }
+      }
+    }
+    this.loading = loading;
+    this.resource = resourceService.resource();
+    this.bindFunctions = this.bindFunctions.bind(this);
+    this.bindFunctions();
+  }
+  onCreated(sv: ((id: ID, ctx?: any) => Promise<T>) | ViewService<T, ID>,
+    param: ResourceService | ViewParameter,
+    showError?: (msg: string, title?: string, detail?: string, callback?: () => void) => void,
+    getLocale?: (profile?: string) => Locale,
+    loading?: LoadingService, ignoreDate?: boolean): void {
+    const resourceService = getResource(param);
+    this.getLocale = getLocaleFunc(param, getLocale);
+    this.showError = getErrorFunc(param, showError);
+    this.loading = getLoadingFunc(param, loading);
+    if (sv) {
+      if (typeof sv === 'function') {
+        this.loadData = sv;
+      } else {
+        this.loadData = sv.load;
+        if (sv.metadata) {
+          const m = sv.metadata();
+          if (m) {
+            // this.metadata = m;
+            const meta = build(m, ignoreDate);
+            this.keys = meta.keys;
+          }
+        }
+      }
+    }
+    this.loading = loading;
+    this.resource = resourceService.resource();
+    this.bindFunctions = this.bindFunctions.bind(this);
+    this.bindFunctions();
+  }
+  protected bindFunctions() {
+    this.getModelName = this.getModelName.bind(this);
+    this.back = this.back.bind(this);
+    this.handleError = this.handleError.bind(this);
+    this.load = this.load.bind(this);
+    this.handleNotFound = this.handleNotFound.bind(this);
+    this.getModelName = this.getModelName.bind(this);
+    this.showModel = this.showModel.bind(this);
+    this.getModel = this.getModel.bind(this);
+  }
+  protected back(e?: any): void {
+    if (e) {
+      e.preventDefault();
+    }
+    window.history.back();
+  }
 
-//   onCreated(service: ViewService<T, ID>,
-//       resourceService: ResourceService,
-//       showError: (m: string, title?: string, detail?: string, callback?: () => void) => void,
-//       loading?: LoadingService): void {
-//     this.service = service;
+  handleError(err: any) {
+    this.running = false;
+    if (this.loading) {
+      this.loading.hideLoading();
+    }
 
-//     this.showError = showError;
-//     this.loading = loading;
-//     this.resourceService = resourceService;
-//     this.resource = resourceService.resource();
+    const r = this.resource;
+    const title = r['error'];
+    let msg = r['error_internal'];
+    if (!err) {
+      this.showError(msg, title);
+      return;
+    }
+    const data = err && err.response ? err.response : err;
+    if (data) {
+      const status = data.status;
+      if (status && !isNaN(status)) {
+        msg = messageByHttpStatus(status, r);
+      }
+      if (status === 403) {
+        msg = r['error_forbidden'];
+        // readOnly(this.form);
+        this.showError(msg, title);
+      } else if (status === 401) {
+        msg = r['error_unauthorized'];
+        // readOnly(this.form);
+        this.showError(msg, title);
+      } else {
+        this.showError(msg, title);
+      }
+    } else {
+      this.showError(msg, title);
+    }
+  }
+  load(_id: ID, callback?: (m: T, showF: (model: T) => void) => void) {
+    const id: any = _id;
+    if (id && id !== '') {
+      this.running = true;
+      showLoading(this.loading);
+      const com = this;
+      if (this.loadData) {
+        this.loadData(id).then(obj => {
+          if (obj) {
+            if (callback) {
+              callback(obj, com.showModel);
+            } else {
+              com.showModel(obj);
+            }
+          } else {
+            com.handleNotFound(com.form);
+          }
+          com.running = false;
+          hideLoading(com.loading);
+        }).catch(err => {
+          const data = (err && err.response) ? err.response : err;
+          if (data && data.status === 404) {
+            com.handleNotFound(com.form);
+          } else {
+            error(err, com.resource, com.showError);
+          }
+          com.running = false;
+          hideLoading(com.loading);
+        });
+      }
+    }
+  }
+  protected handleNotFound(form?: any): void {
+    const msg = message(this.resource, 'error_not_found', 'error');
+    if (this.form) {
+      readOnly(this.form);
+    }
+    this.showError(msg.message, msg.title);
+  }
 
-//     this.back = this.back.bind(this);
-//     this.handleError = this.handleError.bind(this);
-
-//     this.load = this.load.bind(this);
-//     this.handleNotFound = this.handleNotFound.bind(this);
-//     this.getModelName = this.getModelName.bind(this);
-//     this.showModel = this.showModel.bind(this);
-//     this.getModel = this.getModel.bind(this);
-//   }
-
-//   protected back(e?: any): void {
-//     if (e) {
-//       e.preventDefault();
-//     }
-//     window.history.back();
-//   }
-
-//   handleError(err: any) {
-//     this.running = false;
-//     if (this.loading) {
-//       this.loading.hideLoading();
-//     }
-
-//     const r = this.resourceService;
-//     const title = r.value('error');
-//     let msg = r.value('error_internal');
-//     if (!err) {
-//       this.showError(msg, title);
-//       return;
-//     }
-//     const data = err && err.response ? err.response : err;
-//     if (data) {
-//       const status = data.status;
-//       if (status && !isNaN(status)) {
-//         msg = messageByHttpStatus(status, r.resource());
-//       }
-//       if (status === 403) {
-//         msg = r.value('error_forbidden');
-//         readOnly(this.form);
-//         this.showError(msg, title);
-//       } else if (status === 401) {
-//         msg = r.value('error_unauthorized');
-//         readOnly(this.form);
-//         this.showError(msg, title);
-//       } else {
-//         this.showError(msg, title);
-//       }
-//     } else {
-//       this.showError(msg, title);
-//     }
-//   }
-//   async load(_id: ID) {
-//     const id: any = _id;
-//     if (id != null && id !== '') {
-//       this.running = true;
-//       if (this.loading) {
-//         this.loading.showLoading();
-//       }
-//       try {
-//         const obj = await this.service.load(id);
-//         this.showModel(obj);
-//       } catch (err) {
-//         const data = err && (err as any).response ? (err as any).response : err;
-//         if (data && data.status === 404) {
-//           this.handleNotFound(this.form);
-//         } else {
-//           this.handleError(err);
-//         }
-//       } finally {
-//         this.running = false;
-//         if (this.loading) {
-//           this.loading.hideLoading();
-//         }
-//       }
-//     }
-//   }
-//   protected handleNotFound(form?: any): void {
-//     const msg = message(this.resourceService.resource(), 'error_not_found', 'error');
-//     if (this.form) {
-//       readOnly(this.form);
-//     }
-//     this.showError(msg.message, msg.title);
-//   }
-
-//   protected getModelName(): string {
-//     if (this.name && this.name.length > 0) {
-//       return this.name;
-//     }
-//     const n = getModelName(this.form);
-//     if (!n || n.length === 0) {
-//       return 'model';
-//     }
-//   }
-//   showModel(model: T): void {
-//     const name = this.getModelName();
-//     this[name] = model;
-//   }
-//   getModel(): T {
-//     const name = this.getModelName();
-//     const model = this[name];
-//     return model;
-//   }
-// }
+  protected getModelName(): string {
+    if (this.name && this.name.length > 0) {
+      return this.name;
+    }
+    const n = getModelName(this.form);
+    if (n && n.length > 0) {
+      return n;
+    } else {
+      return 'model';
+    }
+  }
+  showModel(model: T): void {
+    const name = this.getModelName();
+    (this as any)[name] = model;
+  }
+  getModel(): T {
+    const name = this.getModelName();
+    const model = (this as any)[name];
+    return model;
+  }
+}
 interface BaseUIService {
   getValue(el: HTMLInputElement, locale?: Locale, currencyCode?: string): string | number | boolean | null | undefined;
   removeError(el: HTMLInputElement): void;
@@ -159,7 +217,10 @@ export class BaseComponent extends Vue {
   loading?: LoadingService;
   getLocale?: (() => Locale);
   // resourceService: ResourceService;
-
+  constructor(showError: ((m: string, title?: string, detail?: string, callback?: () => void) => void)) {
+    super();
+    this.showError = showError;
+  }
   currencySymbol(): boolean {
     return this.includingCurrencySymbol;
   }
@@ -305,7 +366,71 @@ export class EditComponent<T, ID> extends BaseComponent {
   editable = true;
   insertSuccessMsg = '';
   updateSuccessMsg = '';
+  constructor(service: GenericService<T, ID, number | ResultInfo<T>>,
+      param: ResourceService | EditParameter,
+      showMessage: (msg: string) => void,
+      showError: (m: string, title?: string, detail?: string, callback?: () => void) => void,
+      confirm: (m2: string, header: string, yesCallback?: () => void, btnLeftText?: string, btnRightText?: string, noCallback?: () => void) => void,
+      getLocale: () => Locale,
+      ui: UIService,
+      loading?: LoadingService,
+      status?: EditStatusConfig,
+      patchable?: boolean,
+      ignoreDate?: boolean,
+      backOnSaveSuccess?: boolean) {
+    super(showError);
+    const resourceService = getResource(param);
+    this.resource = resourceService.resource();
+    this.getLocale = getLocaleFunc(param, getLocale);
+    this.loading = getLoadingFunc(param, loading);
+    this.ui = getUIService(param, ui);
+    this.showError = getErrorFunc(param, showError);
+    this.showMessage = getMsgFunc(param, showMessage);
+    this.confirm = getConfirmFunc(param, confirm);
+    this.status = getEditStatusFunc(param, status);
+    if (!this.status) {
+      this.status = createEditStatus(this.status);
+    }
+    if (service.metadata) {
+      const metadata = service.metadata();
+      if (metadata) {
+        const meta = build(metadata, ignoreDate);
+        this.keys = meta.keys;
+        this.version = meta.version;
+        this.metadata = metadata;
+        this.metamodel = meta;
+      }
+    }
+    if (!this.keys && service.keys) {
+      const k = service.keys();
+      if (k) {
+        this.keys = k;
+      }
+    }
+    if (!this.keys) {
+      this.keys = [];
+    }
+    if (patchable === false) {
+      this.patchable = patchable;
+    }
+    if (backOnSaveSuccess === false) {
+      this.backOnSuccess = backOnSaveSuccess;
+    }
+    this.insertSuccessMsg = this.resource['msg_save_success'];
+    this.updateSuccessMsg = this.resource['msg_save_success'];
 
+    this.service = service;
+    this.showMessage = showMessage;
+    this.confirm = confirm;
+
+    this.ui = ui;
+    this.getLocale = getLocale;
+    this.showError = showError;
+    this.loading = loading;
+
+    this.bindFunctions = this.bindFunctions.bind(this);
+    this.bindFunctions();
+  }
   onCreated(service: GenericService<T, ID, number | ResultInfo<T>>,
     param: ResourceService | EditParameter,
     showMessage: (msg: string) => void,
@@ -400,39 +525,46 @@ export class EditComponent<T, ID> extends BaseComponent {
     this.postSave = this.postSave.bind(this);
     this.handleDuplicateKey = this.handleDuplicateKey.bind(this);
   }
-  async load(_id: ID, callback?: (m: T) => void) {
+  load(_id: ID | null | undefined, callback?: (m: T, showM: (m2: T) => void) => void) {
     const id: any = _id;
     if (id && id !== '') {
-      try {
-        this.running = true;
-        if (this.loading) {
-          this.loading.showLoading();
-        }
-        const obj = await this.service.load(id);
+
+      const com = this;
+      this.service.load(id).then(obj => {
         if (!obj) {
-          this.handleNotFound(this.form);
+          com.handleNotFound(com.form);
         } else {
+          com.newMode = false;
+          com.orginalModel = clone(obj);
+
+          com.formatModel(obj);
           if (callback) {
-            callback(obj);
+            callback(obj, com.showModel);
+          } else {
+            com.showModel(obj);
           }
-          this.resetState(false, obj, clone(obj));
         }
-      } catch (err) {
-        const data = (err && (err as any).response) ? (err as any).response : err;
+        com.running = false;
+        hideLoading(com.loading);
+      }).catch(err => {
+        const data = (err && err.response) ? err.response : err;
         if (data && data.status === 404) {
-          this.handleNotFound(this.form);
+          com.handleNotFound(com.form);
         } else {
-          this.handleError(err);
+          error(err, com.resource, com.showError);
         }
-      } finally {
-        this.running = false;
-        if (this.loading) {
-          this.loading.hideLoading();
-        }
-      }
+        com.running = false;
+        hideLoading(com.loading);
+      });
     } else {
+      this.newMode = true;
+      this.orginalModel = undefined;
       const obj = this.createModel();
-      this.resetState(true, obj, null);
+      if (callback) {
+        callback(obj, this.showModel);
+      } else {
+        this.showModel(obj);
+      }
     }
   }
   resetState(newMod: boolean, model: T, originalModel?: T | null) {
@@ -736,7 +868,40 @@ export class SearchComponent<T, S extends Filter> extends BaseComponent {
   deleteHeader: string | undefined;
   deleteConfirm: string | undefined;
   deleteFailed: string | undefined;
+  constructor(sv: ((s: S, limit?: number, offset?: number | string, fields?: string[]) => Promise<SearchResult<T>>) | SearchService<T, S>,
+      param: ResourceService | SearchParameter,
+      showMessage?: (msg: string, option?: string) => void,
+      showError?: (m: string, header?: string, detail?: string, callback?: () => void) => void,
+      getLocale?: (profile?: string) => Locale,
+      uis?: UIService,
+      loading?: LoadingService) {
+    super(getErrorFunc(param, showError));
+    this.filter = {} as any;
+    if (typeof sv === 'function') {
+      this.searchFn = sv;
+    } else {
+      this.searchFn = sv.search;
+      // this.service = sv;
+      if (sv.keys) {
+        this.keys = sv.keys();
+      }
+    }
+    this.ui = getUIService(param, uis);
+    this.showError = getErrorFunc(param, showError);
+    this.showMessage = getMsgFunc(param, showMessage);
 
+    this.getLocale = getLocale;
+    this.loading = loading;
+    const resourceService = getResource(param);
+    this.resource = resourceService.resource();
+    this.resourceService = resourceService;
+
+    this.deleteHeader = resourceService.value('msg_delete_header');
+    this.deleteConfirm = resourceService.value('msg_delete_confirm');
+    this.deleteFailed = resourceService.value('msg_delete_failed');
+    this.bindFunctions = this.bindFunctions.bind(this);
+    this.bindFunctions();
+  }
   onCreated(sv: ((s: S, limit?: number, offset?: number | string, fields?: string[]) => Promise<SearchResult<T>>) | SearchService<T, S>,
     param: ResourceService | SearchParameter,
     showMessage?: (msg: string, option?: string) => void,
@@ -745,15 +910,13 @@ export class SearchComponent<T, S extends Filter> extends BaseComponent {
     uis?: UIService,
     loading?: LoadingService) {
     this.filter = {} as any;
-    if (sv) {
-      if (typeof sv === 'function') {
-        this.searchFn = sv;
-      } else {
-        this.searchFn = sv.search;
-        // this.service = sv;
-        if (sv.keys) {
-          this.keys = sv.keys();
-        }
+    if (typeof sv === 'function') {
+      this.searchFn = sv;
+    } else {
+      this.searchFn = sv.search;
+      // this.service = sv;
+      if (sv.keys) {
+        this.keys = sv.keys();
       }
     }
     this.ui = getUIService(param, uis);
@@ -833,10 +996,9 @@ export class SearchComponent<T, S extends Filter> extends BaseComponent {
 
   mapToVModel(s: any): void {
     const keys = Object.keys(s);
-
     // keys.forEach(key => {this.$set(this.$data, key, s[key]); });
     keys.forEach(key => {
-      this[key] = s[key];
+      (this as any)[key] = s[key];
     });
   }
 
@@ -1088,191 +1250,194 @@ export class SearchComponent<T, S extends Filter> extends BaseComponent {
   }
 }
 
-// export class DiffApprComponent<T, ID> extends Vue {
-//   protected loading?: LoadingService;
-//   protected getLocale: () => Locale;
-//   protected showMessage: (msg: string) => void;
-//   protected showError: (m: string, title?: string, detail?: string, callback?: () => void) => void;
-//   protected resourceService?: ResourceService;
-//   protected service: DiffApprService<T, ID>;
+export class DiffApprComponent<T, ID> extends Vue {
+  protected status: DiffStatusConfig;
+  protected showMessage: (msg: string, option?: string) => void;
+  protected showError: (m: string, title?: string, detail?: string, callback?: () => void) => void;
+  protected loading?: LoadingService;
+  resource: StringMap = {} as any;
+  protected running?: boolean;
+  protected form?: HTMLFormElement;
+  protected id?: ID;
+  origin?: T;
+  value: T;
+  disabled?: boolean;
+  service: DiffApprService<T, ID>;
+  constructor(service: DiffApprService<T, ID>,
+    param: ResourceService | DiffParameter,
+    showMessage?: (msg: string, option?: string) => void,
+    showError?: (m: string, title?: string, detail?: string, callback?: () => void) => void,
+    loading?: LoadingService, status?: DiffStatusConfig) {
+      super();
+      this.service = service;
+      const resourceService = getResource(param);
+      this.resource = resourceService.resource();
+      this.loading = getLoadingFunc(param, loading);
+      this.showError = getErrorFunc(param, showError);
+      this.showMessage = getMsgFunc(param, showMessage);
+      this.status = getDiffStatusFunc(param, status);
+      if (!this.status) {
+        this.status = createDiffStatus(this.status);
+      }
+      const x: any = {};
+      this.origin = x;
+      this.value = x;
+      this.bindFunctions = this.bindFunctions.bind(this);
+      this.bindFunctions();
+  }
+  onCreated(service: DiffApprService<T, ID>,
+    param: ResourceService | DiffParameter,
+    showMessage?: (msg: string, option?: string) => void,
+    showError?: (m: string, title?: string, detail?: string, callback?: () => void) => void,
+    loading?: LoadingService, status?: DiffStatusConfig) {
+    this.service = service;
+    const resourceService = getResource(param);
+    this.resource = resourceService.resource();
+    this.loading = getLoadingFunc(param, loading);
+    this.showError = getErrorFunc(param, showError);
+    this.showMessage = getMsgFunc(param, showMessage);
+    this.status = getDiffStatusFunc(param, status);
+    if (!this.status) {
+      this.status = createDiffStatus(this.status);
+    }
+    this.bindFunctions = this.bindFunctions.bind(this);
+    this.bindFunctions();
+  }
+  protected bindFunctions() {
+    this.back = this.back.bind(this);
+    this.load = this.load.bind(this);
+    this.handleNotFound = this.handleNotFound.bind(this);
+    this.formatFields = this.formatFields.bind(this);
+    this.approve = this.approve.bind(this);
+    this.reject = this.reject.bind(this);
+    this.handleError = this.handleError.bind(this);
+    this.alertError = this.alertError.bind(this);
+    this.end = this.end.bind(this);
+  }
+  protected back(): void {
+    window.history.back();
+  }
 
-//   resource: any;
-//   protected running: boolean;
-//   protected form: any;
-//   protected id: ID = null;
-//   origin = {};
-//   value = {};
-//   disabled = false;
+  load(_id: ID) {
+    const x: any = _id;
+    if (x && x !== '') {
+      this.id = _id;
+      this.running = true;
+      showLoading(this.loading);
+      const com = this;
+      this.service.diff(_id).then(dobj => {
+        if (!dobj) {
+          com.handleNotFound(com.form);
+        } else {
+          const formatdDiff = formatDiffModel(dobj, com.formatFields);
+          com.value = formatdDiff.value;
+          com.origin = formatdDiff.origin;
+          if (com.form) {
+            showDiff(com.form, formatdDiff.value, formatdDiff.origin);
+          }
+        }
+        com.running = false;
+        hideLoading(com.loading);
+      }).catch(err => {
+        const data = (err && err.response) ? err.response : err;
+        if (data && data.status === 404) {
+          com.handleNotFound(com.form);
+        } else {
+          error(err, com.resource, com.showError);
+        }
+        com.running = false;
+        hideLoading(com.loading);
+      });
+    }
+  }
 
-//   onCreated(service: DiffApprService<T, ID>,
-//       resourceService: ResourceService,
-//       getLocale: () => Locale,
-//       showMessage: (msg: string) => void,
-//       showError: (m: string, title?: string, detail?: string, callback?: () => void) => void,
-//       loading?: LoadingService) {
-//     this.getLocale = getLocale;
-//     this.showMessage = showMessage;
-//     this.showError = showError;
+  protected handleNotFound(form?: any) {
+    this.disabled = true;
+    this.alertError(this.resource.error_not_found);
+  }
 
-//     this.loading = loading;
-//     this.resourceService = resourceService;
-//     this.service = service;
+  formatFields(value: T): T {
+    return value;
+  }
 
-//     this.resource = resourceService.resource();
-//     this.back = this.back.bind(this);
+  approve(event: any) {
+    event.preventDefault();
+    if (this.running) {
+      return;
+    }
+    const com = this;
+    const st = this.status;
+    const r = this.resource;
+    if (this.id) {
+      this.running = true;
+      showLoading(this.loading);
+      this.service.approve(this.id).then(status => {
+        if (status === st.success) {
+          com.showMessage(r['msg_approve_success']);
+        } else if (status === st.version_error) {
+          com.showMessage(r['msg_approve_version_error']);
+        } else if (status === st.not_found) {
+          com.handleNotFound(com.form);
+        } else {
+          com.showError(r['error_internal'], r['error']);
+        }
+        com.end();
+      }).catch(err => {
+        com.handleError(err);
+        com.end();
+      });
+    }
+  }
+  protected end() {
+    this.disabled = true;
+    this.running = false;
+    hideLoading(this.loading);
+  }
+  reject(event: any) {
+    event.preventDefault();
+    if (this.running) {
+      return;
+    }
+    const com = this;
+    const st = this.status;
+    const r = this.resource;
+    if (this.id) {
+      this.running = true;
+      showLoading(this.loading);
+      this.service.reject(this.id).then(status => {
+        if (status === st.success) {
+          com.showMessage(r['msg_reject_success']);
+        } else if (status === st.version_error) {
+          com.showMessage(r['msg_approve_version_error']);
+        } else if (status === st.not_found) {
+          com.handleNotFound(com.form);
+        } else {
+          com.showError(r['error_internal'], r['error']);
+        }
+        com.end();
+      }).catch(err => {
+        com.handleError(err);
+        com.end();
+      });
+    }
+  }
 
-//     this.load = this.load.bind(this);
-//     this.handleNotFound = this.handleNotFound.bind(this);
-//     this.format = this.format.bind(this);
-//     this.formatFields = this.formatFields.bind(this);
-//     this.approve = this.approve.bind(this);
-//     this.reject = this.reject.bind(this);
-//     this.handleError = this.handleError.bind(this);
-//     this.alertError = this.alertError.bind(this);
-//   }
+  handleError(err: any): void {
+    const r = this.resource;
+    const data = (err && err.response) ? err.response : err;
+    if (data && (data.status === 404 || data.status === 409)) {
+      if (data.status === 404) {
+        this.handleNotFound();
+      } else {
+        this.showMessage(r['msg_approve_version_error']);
+      }
+    } else {
+      error(err, r, this.showError);
+    }
+  }
 
-//   protected back(): void {
-//     window.history.back();
-//   }
-
-//   async load(_id: ID) {
-//     const x: any = _id;
-//     if (x && x !== '') {
-//       this.id = _id;
-//       try {
-//         this.running = true;
-//         if (this.loading) {
-//           this.loading.showLoading();
-//         }
-//         const dobj = await this.service.diff(_id);
-//         if (!dobj) {
-//           this.handleNotFound(this.form);
-//         } else {
-//           const formatdDiff = formatDiffModel(dobj, this.formatFields);
-//           this.format(formatdDiff.origin, formatdDiff.value);
-//           this.value = formatdDiff.value;
-//           this.origin = formatdDiff.origin;
-//         }
-//       } catch (err) {
-//         const data = (err &&  (err as any).response) ? (err as any).response : err;
-//         if (data && data.status === 404) {
-//           this.handleNotFound(this.form);
-//         } else {
-//           this.handleError(err);
-//         }
-//       } finally {
-//         this.running = false;
-//         if (this.loading) {
-//           this.loading.hideLoading();
-//         }
-//       }
-//     }
-//   }
-
-//   protected handleNotFound(form?: any) {
-//     this.disabled = true;
-//     this.alertError(this.resourceService.value('error_not_found'));
-//   }
-
-//   format(origin: T, value: T): void {
-//     const differentKeys = diff(origin, value);
-//     const form = this.form;
-//     for (const differentKey of differentKeys) {
-//       const y = form.querySelector('.' + differentKey);
-//       if (y) {
-//         if (y.childNodes.length === 3) {
-//           y.children[1].classList.add('highlight');
-//           y.children[2].classList.add('highlight');
-//         } else {
-//           y.classList.add('highlight');
-//         }
-//       }
-//     }
-//   }
-
-//   formatFields(value: T): T {
-//     return value;
-//   }
-
-//   async approve(event: any) {
-//     event.preventDefault();
-//     if (this.running) {
-//       return;
-//     }
-//     try {
-//       this.running = true;
-//       if (this.loading) {
-//         this.loading.showLoading();
-//       }
-//       const status = await this.service.approve(this.id);
-//       const r = this.resourceService;
-//       if (status === 1) {
-//         this.showMessage(r.value('msg_approve_success'));
-//       } else if (status === 2) {
-//         this.alertError(r.value('msg_approve_version_error'));
-//       } else if (status === 0) {
-//         this.handleNotFound(this.form);
-//       } else {
-//         this.alertError(r.value('msg_approve_version_error'));
-//       }
-//     } catch (err) {
-//       this.handleError(err);
-//     } finally {
-//       this.disabled = true;
-//       this.running = false;
-//       if (this.loading) {
-//         this.loading.hideLoading();
-//       }
-//     }
-//   }
-
-//   async reject(event: any) {
-//     event.preventDefault();
-//     if (this.running) {
-//       return;
-//     }
-//     try {
-//       this.running = true;
-//       if (this.loading) {
-//         this.loading.showLoading();
-//       }
-//       const status = await this.service.reject(this.id);
-//       const r = this.resourceService;
-//       if (status === 1) {
-//         this.showMessage(r.value('msg_reject_success'));
-//       } else if (status === 2) {
-//         this.alertError(r.value('msg_approve_version_error'));
-//       } else if (status === 0) {
-//         this.handleNotFound(this.form);
-//       } else {
-//         this.alertError(r.value('msg_reject_error'));
-//       }
-//     } catch (err) {
-//       this.handleError(err);
-//     } finally {
-//       this.disabled = true;
-//       this.running = false;
-//       if (this.loading) {
-//         this.loading.hideLoading();
-//       }
-//     }
-//   }
-
-//   handleError(err: any): void {
-//     const r = this.resourceService;
-//     let msg = r.value('error_internal');
-//     if (err) {
-//       const data = err.response ? err.response : err;
-//       const status = data.status;
-//       if (status && !isNaN(status)) {
-//         msg = messageByHttpStatus(status, r.resource());
-//       }
-//     }
-//     this.alertError(msg);
-//   }
-
-//   protected alertError(msg: string): void {
-//     const title = this.resourceService.value('error');
-//     this.showError(msg, title);
-//   }
-// }
+  protected alertError(msg: string): void {
+    const title = this.resource['error'];
+    this.showError(msg, title);
+  }
+}

@@ -1,6 +1,5 @@
 import * as qs from 'query-string';
-import {Router} from 'vue-router';
-import  {RouteLocationNormalized} from 'vue-router';
+import {RouteLocationNormalized, Router} from 'vue-router';
 
 export function navigate($router: Router, stateTo: string, params:any = null) {
   const objParams = params != null ? '/'.concat(params.join('/')) : '';

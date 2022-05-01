@@ -1,6 +1,6 @@
 export * from './core';
 export * from './formatter';
-// export * from './metadata';
+export * from './metadata';
 export * from './formutil';
 export * from './edit';
 export * from './route';

@@ -1,9 +1,10 @@
 import * as qs from 'query-string';
-import VueRouter from 'vue-router';
-import {Route} from 'vue-router';
+import {Router} from 'vue-router';
+import  {RouteLocationNormalized} from 'vue-router';
 
-export function navigate($router: VueRouter, stateTo: string, params = null) {
-  const objParams = params != null ? '/'.concat((params as any).join('/')) : '';
+export function navigate($router: Router, stateTo: string, params:any = null) {
+  const objParams = params != null ? '/'.concat(params.join('/')) : '';
+  
   $router.push({path: stateTo.concat(objParams)});
 }
 
@@ -18,10 +19,11 @@ export function buildParameters(url: string): any {
     urlSearch = url.substr(i + 1);
   }
   const parsed = qs.parse(urlSearch);
+  
   return parsed;
 }
 
-export function buildId(primaryKeys: string[], route0: Route): any {
+export function buildId(primaryKeys: string[], route0: RouteLocationNormalized): any {
   if (!route0) {
     return null;
   }

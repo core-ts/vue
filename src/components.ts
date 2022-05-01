@@ -32,6 +32,7 @@ export class ViewComponent<T, ID> extends Vue {
   resource: StringMap = {} as any;
   protected running?: boolean;
   protected form?: HTMLFormElement;
+  /*
   constructor(sv: ((id: ID, ctx?: any) => Promise<T>) | ViewService<T, ID>,
       param: ResourceService | ViewParameter,
       showError?: (msg: string, title?: string, detail?: string, callback?: () => void) => void,
@@ -62,6 +63,7 @@ export class ViewComponent<T, ID> extends Vue {
     this.bindFunctions = this.bindFunctions.bind(this);
     this.bindFunctions();
   }
+  */
   onCreated(sv: ((id: ID, ctx?: any) => Promise<T>) | ViewService<T, ID>,
     param: ResourceService | ViewParameter,
     showError?: (msg: string, title?: string, detail?: string, callback?: () => void) => void,
@@ -217,10 +219,12 @@ export class BaseComponent extends Vue {
   loading?: LoadingService;
   getLocale?: (() => Locale);
   // resourceService: ResourceService;
+  /*
   constructor(showError: ((m: string, title?: string, detail?: string, callback?: () => void) => void)) {
     super();
     this.showError = showError;
   }
+  */
   currencySymbol(): boolean {
     return this.includingCurrencySymbol;
   }
@@ -366,6 +370,7 @@ export class EditComponent<T, ID> extends BaseComponent {
   editable = true;
   insertSuccessMsg = '';
   updateSuccessMsg = '';
+  /*
   constructor(service: GenericService<T, ID, number | ResultInfo<T>>,
       param: ResourceService | EditParameter,
       showMessage: (msg: string) => void,
@@ -431,6 +436,7 @@ export class EditComponent<T, ID> extends BaseComponent {
     this.bindFunctions = this.bindFunctions.bind(this);
     this.bindFunctions();
   }
+  */
   onCreated(service: GenericService<T, ID, number | ResultInfo<T>>,
     param: ResourceService | EditParameter,
     showMessage: (msg: string) => void,
@@ -525,46 +531,39 @@ export class EditComponent<T, ID> extends BaseComponent {
     this.postSave = this.postSave.bind(this);
     this.handleDuplicateKey = this.handleDuplicateKey.bind(this);
   }
-  load(_id: ID | null | undefined, callback?: (m: T, showM: (m2: T) => void) => void) {
+  async load(_id: ID, callback?: (m: T) => void) {
     const id: any = _id;
     if (id && id !== '') {
-
-      const com = this;
-      this.service.load(id).then(obj => {
+      try {
+        this.running = true;
+        if (this.loading) {
+          this.loading.showLoading();
+        }
+        const obj = await this.service.load(id);
         if (!obj) {
-          com.handleNotFound(com.form);
+          this.handleNotFound(this.form);
         } else {
-          com.newMode = false;
-          com.orginalModel = clone(obj);
-
-          com.formatModel(obj);
           if (callback) {
-            callback(obj, com.showModel);
-          } else {
-            com.showModel(obj);
+            callback(obj);
           }
+          this.resetState(false, obj, clone(obj));
         }
-        com.running = false;
-        hideLoading(com.loading);
-      }).catch(err => {
-        const data = (err && err.response) ? err.response : err;
+      } catch (err) {
+        const data = (err && (err as any).response) ? (err as any).response : err;
         if (data && data.status === 404) {
-          com.handleNotFound(com.form);
+          this.handleNotFound(this.form);
         } else {
-          error(err, com.resource, com.showError);
+          this.handleError(err);
         }
-        com.running = false;
-        hideLoading(com.loading);
-      });
-    } else {
-      this.newMode = true;
-      this.orginalModel = undefined;
-      const obj = this.createModel();
-      if (callback) {
-        callback(obj, this.showModel);
-      } else {
-        this.showModel(obj);
+      } finally {
+        this.running = false;
+        if (this.loading) {
+          this.loading.hideLoading();
+        }
       }
+    } else {
+      const obj = this.createModel();
+      this.resetState(true, obj, null);
     }
   }
   resetState(newMod: boolean, model: T, originalModel?: T | null) {
@@ -868,6 +867,7 @@ export class SearchComponent<T, S extends Filter> extends BaseComponent {
   deleteHeader: string | undefined;
   deleteConfirm: string | undefined;
   deleteFailed: string | undefined;
+  /*
   constructor(sv: ((s: S, limit?: number, offset?: number | string, fields?: string[]) => Promise<SearchResult<T>>) | SearchService<T, S>,
       param: ResourceService | SearchParameter,
       showMessage?: (msg: string, option?: string) => void,
@@ -902,6 +902,7 @@ export class SearchComponent<T, S extends Filter> extends BaseComponent {
     this.bindFunctions = this.bindFunctions.bind(this);
     this.bindFunctions();
   }
+  */
   onCreated(sv: ((s: S, limit?: number, offset?: number | string, fields?: string[]) => Promise<SearchResult<T>>) | SearchService<T, S>,
     param: ResourceService | SearchParameter,
     showMessage?: (msg: string, option?: string) => void,
@@ -1263,6 +1264,7 @@ export class DiffApprComponent<T, ID> extends Vue {
   value: T;
   disabled?: boolean;
   service: DiffApprService<T, ID>;
+  /*
   constructor(service: DiffApprService<T, ID>,
     param: ResourceService | DiffParameter,
     showMessage?: (msg: string, option?: string) => void,
@@ -1285,6 +1287,7 @@ export class DiffApprComponent<T, ID> extends Vue {
       this.bindFunctions = this.bindFunctions.bind(this);
       this.bindFunctions();
   }
+  */
   onCreated(service: DiffApprService<T, ID>,
     param: ResourceService | DiffParameter,
     showMessage?: (msg: string, option?: string) => void,

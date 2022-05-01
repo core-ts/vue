@@ -8,6 +8,7 @@
     "moduleResolution": "node",
     "strict": true,
     "strictNullChecks": true,
+    "strictPropertyInitialization": false,
     "pretty": true,
     "sourceMap": false,
     "declaration": false,

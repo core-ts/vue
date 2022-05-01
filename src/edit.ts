@@ -1,5 +1,5 @@
-import { Attributes, EditStatusConfig, LoadingService, Locale, MetaModel, resources, ResourceService, UIService, ViewService } from './core';
-import { build as build2 } from './metadata';
+import { Attributes, EditStatusConfig, getString, LoadingService, Locale, MetaModel, resources, ResourceService, StringMap, UIService, ViewService } from './core';
+import { build2 } from './metadata';
 
 interface ErrorMessage {
   field: string;
@@ -92,14 +92,14 @@ export function createModel<T>(attributes?: Attributes): T {
   return obj;
 }
 
-export function handleStatus(x: number|string, st: EditStatusConfig, gv: (k: string, p?: any) => string, se: (m: string, title?: string, detail?: string, callback?: () => void) => void): void {
-  const title = gv('error');
+export function handleStatus(x: number|string, st: EditStatusConfig, gv: ((k: string, p?: any) => string)|StringMap, se: (m: string, title?: string, detail?: string, callback?: () => void) => void): void {
+  const title = getString('error', gv);
   if (x === st.version_error) {
-    se(gv('error_version'), title);
+    se(getString('error_version', gv), title);
   } else if (x === st.data_corrupt) {
-    se(gv('error_data_corrupt'), title);
+    se(getString('error_data_corrupt', gv), title);
   } else {
-    se(gv('error_internal'), title);
+    se(getString('error_internal', gv), title);
   }
 }
 export function handleVersion<T>(obj: T, version?: string): void {

@@ -1,6 +1,6 @@
 import {Attribute, Attributes, MetaModel} from './core';
 
-export function build(attributes: Attributes, ignoreDate?: boolean): MetaModel {
+export function build2(attributes: Attributes, ignoreDate?: boolean): MetaModel {
   const meta: MetaModel = {attributes};
   const pks: string[] = new Array<string>();
   const dateFields = new Array<string>();
@@ -71,7 +71,7 @@ export function build(attributes: Attributes, ignoreDate?: boolean): MetaModel {
         }
         case 'object': {
           if (attr.typeof) {
-            const x = build(attr.typeof, ignoreDate);
+            const x = build2(attr.typeof, ignoreDate);
             x.attributeName = key;
             objectFields.push(x);
           }
@@ -79,7 +79,7 @@ export function build(attributes: Attributes, ignoreDate?: boolean): MetaModel {
         }
         case 'array': {
           if (attr.typeof) {
-            const y = build(attr.typeof, ignoreDate);
+            const y = build2(attr.typeof, ignoreDate);
             y.attributeName = key;
             arrayFields.push(y);
           }

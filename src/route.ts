@@ -22,12 +22,12 @@ export function buildParameters(url: string): any {
   return parsed;
 }
 
-export function buildId(primaryKeys: string[], route0: RouteLocationNormalized): any {
-  if (!route0) {
+export function buildId<T>(route: RouteLocationNormalized, primaryKeys?: string[]): T|null {
+  if (!route) {
     return null;
   }
-  const route: any =  route0;
-  const param: any = route ? route.params : {}; // const param: any = route.history.current.params; // const param: any = route?.params || {};
+  const r: any =  route;
+  const param: any = r ? r.params : {}; // const param: any = route.history.current.params; // const param: any = route?.params || {};
   if (!(primaryKeys && primaryKeys.length > 0)) {
     return null;
   } else {

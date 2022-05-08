@@ -1,6 +1,6 @@
 import { Vue } from 'vue-class-component';
 import { createDiffStatus } from '.';
-import { Attributes, createEditStatus, EditStatusConfig, DiffApprService, DiffParameter, DiffStatusConfig, error, Filter, getModelName, handleToggle, hideLoading, LoadingService, Locale, message, messageByHttpStatus, MetaModel, ResourceService, SearchParameter, SearchResult, SearchService, showLoading, StringMap, UIService, ViewContainerRef, ViewParameter, ViewService } from './core';
+import { Attributes, createEditStatus, EditStatusConfig, DiffApprService, DiffParameter, DiffStatusConfig, error, Filter, getModelName, handleToggle, hideLoading, LoadingService, Locale, message, messageByHttpStatus, MetaModel, ResourceService, SearchParameter, SearchResult, SearchService, showLoading, StringMap, UIService, ViewParameter, ViewService } from './core';
 import { formatDiffModel, showDiff } from './diff';
 import { build, createModel, EditParameter, GenericService, handleStatus, handleVersion, ResultInfo } from './edit';
 import { format, json } from './formatter';
@@ -24,7 +24,7 @@ export const enLocale = {
 export class ViewComponent<T, ID> extends Vue {
   protected name?: string;
   protected loading?: LoadingService;
-  protected showError: (msg: string, title?: string, detail?: string, callback?: () => void) => void;
+  protected showError!: (msg: string, title?: string, detail?: string, callback?: () => void) => void;
   protected loadData?: (id: ID, ctx?: any) => Promise<T | null | undefined>;
   // protected service?: ViewService<T, ID>;
   protected keys?: string[];
@@ -32,38 +32,6 @@ export class ViewComponent<T, ID> extends Vue {
   resource: StringMap = {} as any;
   protected running?: boolean;
   protected form?: HTMLFormElement;
-  /*
-  constructor(sv: ((id: ID, ctx?: any) => Promise<T>) | ViewService<T, ID>,
-      param: ResourceService | ViewParameter,
-      showError?: (msg: string, title?: string, detail?: string, callback?: () => void) => void,
-      getLocale?: (profile?: string) => Locale,
-      loading?: LoadingService, ignoreDate?: boolean) {
-    super();
-    const resourceService = getResource(param);
-    this.getLocale = getLocaleFunc(param, getLocale);
-    this.showError = getErrorFunc(param, showError);
-    this.loading = getLoadingFunc(param, loading);
-    if (sv) {
-      if (typeof sv === 'function') {
-        this.loadData = sv;
-      } else {
-        this.loadData = sv.load;
-        if (sv.metadata) {
-          const m = sv.metadata();
-          if (m) {
-            // this.metadata = m;
-            const meta = build(m, ignoreDate);
-            this.keys = meta.keys;
-          }
-        }
-      }
-    }
-    this.loading = loading;
-    this.resource = resourceService.resource();
-    this.bindFunctions = this.bindFunctions.bind(this);
-    this.bindFunctions();
-  }
-  */
   onCreated(sv: ((id: ID, ctx?: any) => Promise<T>) | ViewService<T, ID>,
     param: ResourceService | ViewParameter,
     showError?: (msg: string, title?: string, detail?: string, callback?: () => void) => void,
@@ -210,7 +178,7 @@ interface BaseUIService {
   removeError(el: HTMLInputElement): void;
 }
 export class BaseComponent extends Vue {
-  showError: ((m: string, title?: string, detail?: string, callback?: () => void) => void);
+  showError!: ((m: string, title?: string, detail?: string, callback?: () => void) => void);
   includingCurrencySymbol = false;
   resource: StringMap = {} as any;
   running = false;
@@ -218,17 +186,10 @@ export class BaseComponent extends Vue {
   uiS1: BaseUIService | undefined;
   loading?: LoadingService;
   getLocale?: (() => Locale);
-  // resourceService: ResourceService;
-  /*
-  constructor(showError: ((m: string, title?: string, detail?: string, callback?: () => void) => void)) {
-    super();
-    this.showError = showError;
-  }
-  */
+
   currencySymbol(): boolean {
     return this.includingCurrencySymbol;
   }
-
   getCurrencyCode(): string | undefined {
     if (this.form) {
       const x = this.form.getAttribute('currency-code');
@@ -349,11 +310,11 @@ export function valueOfCheckbox(ctrl: HTMLInputElement): string | number | boole
   }
 }
 export class EditComponent<T, ID> extends BaseComponent {
-  protected service: GenericService<T, ID, number | ResultInfo<T>>;
-  status: EditStatusConfig;
-  protected showMessage: (msg: string) => void;
-  protected confirm: (msg: string, header: string, yesCallback?: () => void, btnLeftText?: string, btnRightText?: string, noCallback?: () => void) => void;
-  ui: UIService;
+  protected service!: GenericService<T, ID, number | ResultInfo<T>>;
+  status!: EditStatusConfig;
+  protected showMessage!: (msg: string) => void;
+  protected confirm!: (msg: string, header: string, yesCallback?: () => void, btnLeftText?: string, btnRightText?: string, noCallback?: () => void) => void;
+  ui!: UIService;
   protected name?: string;
   protected metadata?: Attributes;
   protected metamodel?: MetaModel;
@@ -370,91 +331,21 @@ export class EditComponent<T, ID> extends BaseComponent {
   editable = true;
   insertSuccessMsg = '';
   updateSuccessMsg = '';
-  /*
-  constructor(service: GenericService<T, ID, number | ResultInfo<T>>,
-      param: ResourceService | EditParameter,
-      showMessage: (msg: string) => void,
-      showError: (m: string, title?: string, detail?: string, callback?: () => void) => void,
-      confirm: (m2: string, header: string, yesCallback?: () => void, btnLeftText?: string, btnRightText?: string, noCallback?: () => void) => void,
-      getLocale: () => Locale,
-      ui: UIService,
-      loading?: LoadingService,
-      status?: EditStatusConfig,
-      patchable?: boolean,
-      ignoreDate?: boolean,
-      backOnSaveSuccess?: boolean) {
-    super(showError);
-    const resourceService = getResource(param);
-    this.resource = resourceService.resource();
-    this.getLocale = getLocaleFunc(param, getLocale);
-    this.loading = getLoadingFunc(param, loading);
-    this.ui = getUIService(param, ui);
-    this.showError = getErrorFunc(param, showError);
-    this.showMessage = getMsgFunc(param, showMessage);
-    this.confirm = getConfirmFunc(param, confirm);
-    this.status = getEditStatusFunc(param, status);
-    if (!this.status) {
-      this.status = createEditStatus(this.status);
-    }
-    if (service.metadata) {
-      const metadata = service.metadata();
-      if (metadata) {
-        const meta = build(metadata, ignoreDate);
-        this.keys = meta.keys;
-        this.version = meta.version;
-        this.metadata = metadata;
-        this.metamodel = meta;
-      }
-    }
-    if (!this.keys && service.keys) {
-      const k = service.keys();
-      if (k) {
-        this.keys = k;
-      }
-    }
-    if (!this.keys) {
-      this.keys = [];
-    }
-    if (patchable === false) {
-      this.patchable = patchable;
-    }
-    if (backOnSaveSuccess === false) {
-      this.backOnSuccess = backOnSaveSuccess;
-    }
-    this.insertSuccessMsg = this.resource['msg_save_success'];
-    this.updateSuccessMsg = this.resource['msg_save_success'];
 
-    this.service = service;
-    this.showMessage = showMessage;
-    this.confirm = confirm;
-
-    this.ui = ui;
-    this.getLocale = getLocale;
-    this.showError = showError;
-    this.loading = loading;
-
-    this.bindFunctions = this.bindFunctions.bind(this);
-    this.bindFunctions();
-  }
-  */
   onCreated(service: GenericService<T, ID, number | ResultInfo<T>>,
     param: ResourceService | EditParameter,
-    showMessage: (msg: string) => void,
-    showError: (m: string, title?: string, detail?: string, callback?: () => void) => void,
-    confirm: (m2: string, header: string, yesCallback?: () => void, btnLeftText?: string, btnRightText?: string, noCallback?: () => void) => void,
-    getLocale: () => Locale,
-    ui: UIService,
-    loading?: LoadingService,
-    status?: EditStatusConfig,
-    patchable?: boolean,
-    ignoreDate?: boolean,
-    backOnSaveSuccess?: boolean
+    showMessage?: (msg: string, option?: string) => void,
+    showError?: (m: string, title?: string, detail?: string, callback?: () => void) => void,
+    confirm?: (m2: string, header: string, yesCallback?: () => void, btnLeftText?: string, btnRightText?: string, noCallback?: () => void) => void,
+    getLocale?: (profile?: string) => Locale,
+    uis?: UIService,
+    loading?: LoadingService, status?: EditStatusConfig, patchable?: boolean, ignoreDate?: boolean, backOnSaveSuccess?: boolean
   ) {
     const resourceService = getResource(param);
     this.resource = resourceService.resource();
     this.getLocale = getLocaleFunc(param, getLocale);
     this.loading = getLoadingFunc(param, loading);
-    this.ui = getUIService(param, ui);
+    this.ui = getUIService(param, uis);
     this.showError = getErrorFunc(param, showError);
     this.showMessage = getMsgFunc(param, showMessage);
     this.confirm = getConfirmFunc(param, confirm);
@@ -489,14 +380,7 @@ export class EditComponent<T, ID> extends BaseComponent {
     }
     this.insertSuccessMsg = this.resource['msg_save_success'];
     this.updateSuccessMsg = this.resource['msg_save_success'];
-
     this.service = service;
-    this.showMessage = showMessage;
-    this.confirm = confirm;
-
-    this.ui = ui;
-    this.getLocale = getLocale;
-    this.showError = showError;
     this.loading = loading;
 
     this.bindFunctions = this.bindFunctions.bind(this);
@@ -531,39 +415,43 @@ export class EditComponent<T, ID> extends BaseComponent {
     this.postSave = this.postSave.bind(this);
     this.handleDuplicateKey = this.handleDuplicateKey.bind(this);
   }
-  async load(_id: ID, callback?: (m: T) => void) {
+  load(_id: ID | null | undefined, callback?: (m: T, showM: (m2: T) => void) => void) {
     const id: any = _id;
     if (id && id !== '') {
-      try {
-        this.running = true;
-        if (this.loading) {
-          this.loading.showLoading();
-        }
-        const obj = await this.service.load(id);
+      this.service.load(id).then(obj => {
         if (!obj) {
           this.handleNotFound(this.form);
         } else {
+          this.newMode = false;
+          this.orginalModel = clone(obj);
+          this.formatModel(obj);
           if (callback) {
-            callback(obj);
+            callback(obj, this.showModel);
+          } else {
+            this.showModel(obj);
           }
-          this.resetState(false, obj, clone(obj));
         }
-      } catch (err) {
-        const data = (err && (err as any).response) ? (err as any).response : err;
+        this.running = false;
+        hideLoading(this.loading);
+      }).catch(err => {
+        const data = (err && err.response) ? err.response : err;
         if (data && data.status === 404) {
           this.handleNotFound(this.form);
         } else {
-          this.handleError(err);
+          error(err, this.resource, this.showError);
         }
-      } finally {
         this.running = false;
-        if (this.loading) {
-          this.loading.hideLoading();
-        }
-      }
+        hideLoading(this.loading);
+      });
     } else {
+      this.newMode = true;
+      this.orginalModel = undefined;
       const obj = this.createModel();
-      this.resetState(true, obj, null);
+      if (callback) {
+        callback(obj, this.showModel);
+      } else {
+        this.showModel(obj);
+      }
     }
   }
   resetState(newMod: boolean, model: T, originalModel?: T | null) {
@@ -717,7 +605,7 @@ export class EditComponent<T, ID> extends BaseComponent {
     }
   }
 
-  async doSave(obj: T, body?: Partial<T>, isBack?: boolean) {
+  doSave(obj: T, body?: Partial<T>, isBack?: boolean) {
     this.running = true;
     if (this.loading) {
       this.loading.showLoading();
@@ -819,9 +707,10 @@ export interface PageParam {
 }
 export class SearchComponent<T, S extends Filter> extends BaseComponent {
   // service: SearchService<T, S> | undefined;
-  resourceService: ResourceService;
-  searchFn: (s: S, limit?: number, offset?: number | string, fields?: string[]) => Promise<SearchResult<T>>;
-  showMessage: (msg: string, option?: string) => void;
+  // service: SearchService<T, S> | undefined;
+  resourceService!: ResourceService;
+  searchFn!: (s: S, limit?: number, offset?: number | string, fields?: string[]) => Promise<SearchResult<T>>;
+  showMessage!: (msg: string, option?: string) => void;
   ui?: UIService;
   // Pagination
   nextPageToken?: string;
@@ -867,42 +756,7 @@ export class SearchComponent<T, S extends Filter> extends BaseComponent {
   deleteHeader: string | undefined;
   deleteConfirm: string | undefined;
   deleteFailed: string | undefined;
-  /*
-  constructor(sv: ((s: S, limit?: number, offset?: number | string, fields?: string[]) => Promise<SearchResult<T>>) | SearchService<T, S>,
-      param: ResourceService | SearchParameter,
-      showMessage?: (msg: string, option?: string) => void,
-      showError?: (m: string, header?: string, detail?: string, callback?: () => void) => void,
-      getLocale?: (profile?: string) => Locale,
-      uis?: UIService,
-      loading?: LoadingService) {
-    super(getErrorFunc(param, showError));
-    this.filter = {} as any;
-    if (typeof sv === 'function') {
-      this.searchFn = sv;
-    } else {
-      this.searchFn = sv.search;
-      // this.service = sv;
-      if (sv.keys) {
-        this.keys = sv.keys();
-      }
-    }
-    this.ui = getUIService(param, uis);
-    this.showError = getErrorFunc(param, showError);
-    this.showMessage = getMsgFunc(param, showMessage);
 
-    this.getLocale = getLocale;
-    this.loading = loading;
-    const resourceService = getResource(param);
-    this.resource = resourceService.resource();
-    this.resourceService = resourceService;
-
-    this.deleteHeader = resourceService.value('msg_delete_header');
-    this.deleteConfirm = resourceService.value('msg_delete_confirm');
-    this.deleteFailed = resourceService.value('msg_delete_failed');
-    this.bindFunctions = this.bindFunctions.bind(this);
-    this.bindFunctions();
-  }
-  */
   onCreated(sv: ((s: S, limit?: number, offset?: number | string, fields?: string[]) => Promise<SearchResult<T>>) | SearchService<T, S>,
     param: ResourceService | SearchParameter,
     showMessage?: (msg: string, option?: string) => void,
@@ -1252,42 +1106,19 @@ export class SearchComponent<T, S extends Filter> extends BaseComponent {
 }
 
 export class DiffApprComponent<T, ID> extends Vue {
-  protected status: DiffStatusConfig;
-  protected showMessage: (msg: string, option?: string) => void;
-  protected showError: (m: string, title?: string, detail?: string, callback?: () => void) => void;
+  protected status!: DiffStatusConfig;
+  protected showMessage!: (msg: string, option?: string) => void;
+  protected showError!: (m: string, title?: string, detail?: string, callback?: () => void) => void;
   protected loading?: LoadingService;
   resource: StringMap = {} as any;
   protected running?: boolean;
   protected form?: HTMLFormElement;
   protected id?: ID;
   origin?: T;
-  value: T;
+  value!: T;
   disabled?: boolean;
-  service: DiffApprService<T, ID>;
-  /*
-  constructor(service: DiffApprService<T, ID>,
-    param: ResourceService | DiffParameter,
-    showMessage?: (msg: string, option?: string) => void,
-    showError?: (m: string, title?: string, detail?: string, callback?: () => void) => void,
-    loading?: LoadingService, status?: DiffStatusConfig) {
-      super();
-      this.service = service;
-      const resourceService = getResource(param);
-      this.resource = resourceService.resource();
-      this.loading = getLoadingFunc(param, loading);
-      this.showError = getErrorFunc(param, showError);
-      this.showMessage = getMsgFunc(param, showMessage);
-      this.status = getDiffStatusFunc(param, status);
-      if (!this.status) {
-        this.status = createDiffStatus(this.status);
-      }
-      const x: any = {};
-      this.origin = x;
-      this.value = x;
-      this.bindFunctions = this.bindFunctions.bind(this);
-      this.bindFunctions();
-  }
-  */
+  service!: DiffApprService<T, ID>;
+
   onCreated(service: DiffApprService<T, ID>,
     param: ResourceService | DiffParameter,
     showMessage?: (msg: string, option?: string) => void,

@@ -1,6 +1,6 @@
 {
   "name": "vuex-one",
-  "version": "0.0.2",
+  "version": "0.0.3",
   "description": "vuex-one",
   "main": "./lib/index.js",
   "types": "./src/index.ts",

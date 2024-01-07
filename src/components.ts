@@ -1,6 +1,6 @@
 import { Vue } from 'vue-class-component';
 import { createDiffStatus } from '.';
-import { Attributes, createEditStatus, EditStatusConfig, DiffApprService, DiffParameter, DiffStatusConfig, error, Filter, getModelName, handleToggle, hideLoading, LoadingService, Locale, message, messageByHttpStatus, MetaModel, ResourceService, SearchParameter, SearchResult, SearchService, showLoading, StringMap, UIService, ViewParameter, ViewService } from './core';
+import { Attributes, createEditStatus, EditStatusConfig, DiffApprService, DiffParameter, DiffStatusConfig, error, ErrorMessage, Filter, getModelName, handleToggle, hideLoading, LoadingService, Locale, message, messageByHttpStatus, MetaModel, ResourceService, SearchParameter, SearchResult, SearchService, showLoading, StringMap, UIService, ViewParameter, ViewService } from './core';
 import { formatDiffModel, showDiff } from './diff';
 import { build, createModel, EditParameter, GenericService, handleStatus, handleVersion, ResultInfo } from './edit';
 import { format, json } from './formatter';
@@ -310,7 +310,7 @@ export function valueOfCheckbox(ctrl: HTMLInputElement): string | number | boole
   }
 }
 export class EditComponent<T, ID> extends BaseComponent {
-  protected service!: GenericService<T, ID, number | ResultInfo<T>>;
+  protected service!: GenericService<T, ID, number|T|ErrorMessage[]>;
   status!: EditStatusConfig;
   protected showMessage!: (msg: string) => void;
   protected confirm!: (msg: string, header: string, yesCallback?: () => void, btnLeftText?: string, btnRightText?: string, noCallback?: () => void) => void;
@@ -332,7 +332,7 @@ export class EditComponent<T, ID> extends BaseComponent {
   insertSuccessMsg = '';
   updateSuccessMsg = '';
 
-  onCreated(service: GenericService<T, ID, number | ResultInfo<T>>,
+  onCreated(service: GenericService<T, ID, number|T|ErrorMessage[]>,
     param: ResourceService | EditParameter,
     showMessage?: (msg: string, option?: string) => void,
     showError?: (m: string, title?: string, detail?: string, callback?: () => void) => void,
@@ -614,52 +614,58 @@ export class EditComponent<T, ID> extends BaseComponent {
     const com = this;
     if (!this.newMode) {
       if (this.service.patch && this.patchable === true && body && Object.keys(body).length > 0) {
-        this.service.patch(body).then(result => com.postSave(result, isBackO)).catch(err => this.handleError(err));
+        this.service.patch(body).then(result => com.postSave(result, obj, isBackO)).catch(err => this.handleError(err));
       } else {
-        this.service.update(obj).then(result => com.postSave(result, isBackO)).catch(err => this.handleError(err));
+        this.service.update(obj).then(result => com.postSave(result, obj, isBackO)).catch(err => this.handleError(err));
       }
     } else {
       trim(obj);
-      this.service.insert(obj).then(result => com.postSave(result, isBackO)).catch(err => this.handleError(err));
+      this.service.insert(obj).then(result => com.postSave(result, obj, isBackO)).catch(err => this.handleError(err));
     }
   }
 
-  protected succeed(msg: string, backOnSave: boolean, result?: ResultInfo<T>) {
-    if (result) {
-      const model = result.value;
+  protected succeed(msg: string, origin: T, isBack?: boolean, model?: T) {
+    if (model) {
       this.newMode = false;
-      if (model && this.setBack === true) {
-        if (!this.backOnSuccess) {
-          this.resetState(false, model, clone(model));
-        }
+      if (model && this.setBack) {
+        this.resetState(false, model, clone(model));
       } else {
-        handleVersion(this.getRawModel(), this.version);
+        handleVersion(origin, this.version);
       }
     } else {
-      handleVersion(this.getRawModel(), this.version);
+      handleVersion(origin, this.version);
     }
+    const isBackO = (isBack == null || isBack === undefined ? this.backOnSuccess : isBack);
     this.showMessage(msg);
-    if (backOnSave) {
+    if (isBackO) {
       this.back();
     }
   }
-  protected fail(result: ResultInfo<T>) {
-    const errors = result.errors;
+  protected fail(result: ErrorMessage[]) {
     const f = this.form;
     const u = this.ui;
-    const unmappedErrors = u.showFormError(f, errors);
-    focusFirstError(f);
-    if (!result.message) {
-      if (errors && errors.length === 1) {
-        result.message = errors[0].message;
+    if (u && f) {
+      const unmappedErrors = u.showFormError(f, result);
+      focusFirstError(f);
+      if (unmappedErrors && unmappedErrors.length > 0) {
+        const t = this.resource['error'];
+        if (u && u.buildErrorMessage) {
+          const msg = u.buildErrorMessage(unmappedErrors);
+          this.showError(msg, t);
+        } else {
+          this.showError(unmappedErrors[0].field + ' ' + unmappedErrors[0].code + ' ' + unmappedErrors[0].message, t);
+        }
+      }
+    } else {
+      const t = this.resource['error'];
+      if (result.length > 0) {
+        this.showError(result[0].field + ' ' + result[0].code + ' ' + result[0].message, t);
       } else {
-        result.message = u.buildErrorMessage(unmappedErrors);
+        this.showError(t, t);
       }
     }
-    const title = this.resource['error'];
-    this.showError(result.message ? result.message : 'Error', title);
   }
-  protected postSave(res: number | ResultInfo<T>, backOnSave: boolean): void {
+  protected postSave(res: number|string|T|ErrorMessage[], origin: T, isPatch: boolean, backOnSave?: boolean): void {
     this.running = false;
     if (this.loading) {
       this.loading.hideLoading();
@@ -668,34 +674,36 @@ export class EditComponent<T, ID> extends BaseComponent {
     const newMod = this.newMode;
     const successMsg = (newMod ? this.insertSuccessMsg : this.updateSuccessMsg);
     const x: any = res;
-    if (!isNaN(x)) {
-      if (x > 0) {
-        this.succeed(successMsg, backOnSave);
+    if (Array.isArray(x)) {
+      this.fail(x);
+    } else if (!isNaN(x)) {
+      if (x === st.success) {
+        this.succeed(successMsg, origin, backOnSave);
       } else {
-        if (newMod) {
+        if (newMod && x === st.duplicate_key) {
           this.handleDuplicateKey();
-        } else {
+        } else if (!newMod && x === st.not_found) {
           this.handleNotFound();
+        } else {
+          handleStatus(x as number, st, this.resource, this.showError);
         }
       }
     } else {
-      const result: ResultInfo<T> = x;
-      if (result.status === 1) {
-        this.succeed(successMsg, backOnSave, result);
-      } else if (result.status === 2) {
-        this.fail(result);
-      } else if (result.status === 0) {
-        if (newMod) {
-          this.handleDuplicateKey(result);
-        } else {
-          this.handleNotFound();
+      const result: T = x;
+      if (isPatch) {
+        const keys = Object.keys(result as any);
+        const a: any = origin;
+        for (const k of keys) {
+          a[k] = (result as any)[k];
         }
+        this.succeed(successMsg, a, backOnSave);
       } else {
-        handleStatus(result.status, st, this.resource, this.showError);
+        this.succeed(successMsg, origin, backOnSave, result);
       }
+      this.showMessage(successMsg);
     }
   }
-  protected handleDuplicateKey(result?: ResultInfo<T>): void {
+  protected handleDuplicateKey(result?: T): void {
     const msg = message(this.resource, 'error_duplicate_key', 'error');
     this.showError(msg.message, msg.title);
   }

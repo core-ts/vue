@@ -8,3 +8,11 @@ export * from './reflect';
 export * from './search';
 export * from './reflect';
 export * from './search';
+
+export function getParam(url: string, i?: number): string {
+  const ps = url.split('/');
+  if (!i || i < 0) {
+    i = 0;
+  }
+  return ps[ps.length - 1 - i];
+}

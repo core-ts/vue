@@ -1,11 +1,10 @@
 import { Vue } from 'vue-class-component';
-import { createDiffStatus } from '.';
-import { Attributes, createEditStatus, EditStatusConfig, DiffApprService, DiffParameter, DiffStatusConfig, error, ErrorMessage, Filter, getModelName, handleToggle, hideLoading, LoadingService, Locale, message, messageByHttpStatus, MetaModel, ResourceService, SearchParameter, SearchResult, SearchService, showLoading, StringMap, UIService, ViewParameter, ViewService } from './core';
+import { Attributes, DiffApprService, DiffParameter, error, ErrorMessage, Filter, getModelName, handleToggle, hideLoading, LoadingService, Locale, message, messageByHttpStatus, MetaModel, ResourceService, SearchParameter, SearchResult, SearchService, showLoading, StringMap, UIService, ViewParameter, ViewService } from './core';
 import { formatDiffModel, showDiff } from './diff';
-import { build, createModel, EditParameter, GenericService, handleStatus, handleVersion, ResultInfo } from './edit';
+import { build, createModel, EditParameter, GenericService, handleVersion } from './edit';
 import { format, json } from './formatter';
 import { focusFirstError, readOnly } from './formutil';
-import { getConfirmFunc, getDiffStatusFunc, getEditStatusFunc, getErrorFunc, getLoadingFunc, getLocaleFunc, getMsgFunc, getResource, getUIService } from './input';
+import { getConfirmFunc, getErrorFunc, getLoadingFunc, getLocaleFunc, getMsgFunc, getResource, getUIService } from './input';
 import { clone, makeDiff, trim, setValue } from './reflect';
 import { addParametersIntoUrl, append, buildMessage, changePage, changePageSize, formatResults, getFields, handleSortEvent, initFilter, mergeFilter, more, optimizeFilter, reset, showPaging } from './search';
 
@@ -311,7 +310,7 @@ export function valueOfCheckbox(ctrl: HTMLInputElement): string | number | boole
 }
 export class EditComponent<T, ID> extends BaseComponent {
   protected service!: GenericService<T, ID, number|T|ErrorMessage[]>;
-  status!: EditStatusConfig;
+  // status!: EditStatusConfig;
   protected showMessage!: (msg: string) => void;
   protected confirm!: (msg: string, header: string, yesCallback?: () => void, btnLeftText?: string, btnRightText?: string, noCallback?: () => void) => void;
   ui!: UIService;
@@ -327,8 +326,8 @@ export class EditComponent<T, ID> extends BaseComponent {
   backOnSuccess = true;
   protected orginalModel: T | undefined | null;
 
-  addable = true;
-  editable = true;
+  // addable = true;
+  // editable = true;
   insertSuccessMsg = '';
   updateSuccessMsg = '';
 
@@ -339,7 +338,7 @@ export class EditComponent<T, ID> extends BaseComponent {
     confirm?: (m2: string, header: string, yesCallback?: () => void, btnLeftText?: string, btnRightText?: string, noCallback?: () => void) => void,
     getLocale?: (profile?: string) => Locale,
     uis?: UIService,
-    loading?: LoadingService, status?: EditStatusConfig, patchable?: boolean, ignoreDate?: boolean, backOnSaveSuccess?: boolean
+    loading?: LoadingService, patchable?: boolean, ignoreDate?: boolean, backOnSaveSuccess?: boolean
   ) {
     const resourceService = getResource(param);
     this.resource = resourceService.resource();
@@ -349,10 +348,12 @@ export class EditComponent<T, ID> extends BaseComponent {
     this.showError = getErrorFunc(param, showError);
     this.showMessage = getMsgFunc(param, showMessage);
     this.confirm = getConfirmFunc(param, confirm);
+    /*
     this.status = getEditStatusFunc(param, status);
     if (!this.status) {
       this.status = createEditStatus(this.status);
     }
+    */
     if (service.metadata) {
       const metadata = service.metadata();
       if (metadata) {
@@ -553,41 +554,31 @@ export class EditComponent<T, ID> extends BaseComponent {
   onSave(isBack?: boolean) {
     const r = this.resource;
     const newMod = this.newMode;
-    if (newMod === true && this.addable === true) {
-      const m = message(r, 'error_permission_add', 'error_permission');
-      this.showError(m.message, m.title);
+    if (this.running === true) {
       return;
-    } else if (this.newMode === false && this.editable === false) {
-      const msg = message(r, 'error_permission_edit', 'error_permission');
-      this.showError(msg.message, msg.title);
-      return;
-    } else {
-      if (this.running === true) {
-        return;
-      }
-      const com = this;
-      const obj = com.getModel();
-      if (!newMod) {        
-        const diffObj = makeDiff(this.orginalModel, obj, this.keys, this.version);
-        const l = Object.keys(diffObj as any).length;
-        if (l === 0) {
-          this.showMessage(r['msg_no_change']);
-        } else {
-          com.validate(obj, () => {
-            const msg = message(r, 'msg_confirm_save', 'confirm', 'yes', 'no');
-            this.confirm(msg.message, msg.title, () => {
-              com.doSave(obj, diffObj as any, isBack);
-            }, msg.no, msg.yes);
-          });
-        }
+    }
+    const com = this;
+    const obj = com.getModel();
+    if (!newMod) {        
+      const diffObj = makeDiff(this.orginalModel, obj, this.keys, this.version);
+      const l = Object.keys(diffObj as any).length;
+      if (l === 0) {
+        this.showMessage(r['msg_no_change']);
       } else {
         com.validate(obj, () => {
           const msg = message(r, 'msg_confirm_save', 'confirm', 'yes', 'no');
           this.confirm(msg.message, msg.title, () => {
-            com.doSave(obj, obj, isBack);
+            com.doSave(obj, diffObj as any, isBack);
           }, msg.no, msg.yes);
         });
       }
+    } else {
+      com.validate(obj, () => {
+        const msg = message(r, 'msg_confirm_save', 'confirm', 'yes', 'no');
+        this.confirm(msg.message, msg.title, () => {
+          com.doSave(obj, obj, isBack);
+        }, msg.no, msg.yes);
+      });
     }
   }
   validate(obj: T, callback: (u?: T) => void): void {
@@ -670,22 +661,22 @@ export class EditComponent<T, ID> extends BaseComponent {
     if (this.loading) {
       this.loading.hideLoading();
     }
-    const st = this.status;
+    // const st = this.status;
     const newMod = this.newMode;
     const successMsg = (newMod ? this.insertSuccessMsg : this.updateSuccessMsg);
     const x: any = res;
     if (Array.isArray(x)) {
       this.fail(x);
     } else if (!isNaN(x)) {
-      if (x === st.success) {
+      if (x >= 1) {
         this.succeed(successMsg, origin, backOnSave);
       } else {
-        if (newMod && x === st.duplicate_key) {
+        if (newMod && x <= 0) {
           this.handleDuplicateKey();
-        } else if (!newMod && x === st.not_found) {
+        } else if (!newMod && x === 0) {
           this.handleNotFound();
         } else {
-          handleStatus(x as number, st, this.resource, this.showError);
+          this.showError(this.resource['error_version'], this.resource['error']);
         }
       }
     } else {
@@ -754,12 +745,12 @@ export class SearchComponent<T, S extends Filter> extends BaseComponent {
 
   view?:string;
   chkAll: any = null;
-  searchable = true;
-  viewable = true;
-  addable = true;
-  editable = true;
-  approvable = true;
-  deletable = true;
+  // searchable = true;
+  // viewable = true;
+  // addable = true;
+  // editable = true;
+  // approvable = true;
+  // deletable = true;
 
   deleteHeader: string | undefined;
   deleteConfirm: string | undefined;
@@ -1062,7 +1053,7 @@ export class SearchComponent<T, S extends Filter> extends BaseComponent {
       if ((!s.page || s.page <= 1) && s.firstLimit && s.firstLimit > 0) {
         limit = s.firstLimit;
       }
-      com.nextPageToken = sr.nextPageToken;
+      com.nextPageToken = sr.next;
       if (this.append && (s.page && s.page > 1)) {
         append(this.getList(), results);
       } else {
@@ -1114,7 +1105,7 @@ export class SearchComponent<T, S extends Filter> extends BaseComponent {
 }
 
 export class DiffApprComponent<T, ID> extends Vue {
-  protected status!: DiffStatusConfig;
+  // protected status!: DiffStatusConfig;
   protected showMessage!: (msg: string, option?: string) => void;
   protected showError!: (m: string, title?: string, detail?: string, callback?: () => void) => void;
   protected loading?: LoadingService;
@@ -1131,17 +1122,19 @@ export class DiffApprComponent<T, ID> extends Vue {
     param: ResourceService | DiffParameter,
     showMessage?: (msg: string, option?: string) => void,
     showError?: (m: string, title?: string, detail?: string, callback?: () => void) => void,
-    loading?: LoadingService, status?: DiffStatusConfig) {
+    loading?: LoadingService) {
     this.service = service;
     const resourceService = getResource(param);
     this.resource = resourceService.resource();
     this.loading = getLoadingFunc(param, loading);
     this.showError = getErrorFunc(param, showError);
     this.showMessage = getMsgFunc(param, showMessage);
+    /*
     this.status = getDiffStatusFunc(param, status);
     if (!this.status) {
       this.status = createDiffStatus(this.status);
     }
+    */
     this.bindFunctions = this.bindFunctions.bind(this);
     this.bindFunctions();
   }
@@ -1208,17 +1201,17 @@ export class DiffApprComponent<T, ID> extends Vue {
       return;
     }
     const com = this;
-    const st = this.status;
+    // const st = this.status;
     const r = this.resource;
     if (this.id) {
       this.running = true;
       showLoading(this.loading);
       this.service.approve(this.id).then(status => {
-        if (status === st.success) {
+        if (status > 0) {
           com.showMessage(r['msg_approve_success']);
-        } else if (status === st.version_error) {
+        } else if (status < 0) {
           com.showMessage(r['msg_approve_version_error']);
-        } else if (status === st.not_found) {
+        } else if (status === 0) {
           com.handleNotFound(com.form);
         } else {
           com.showError(r['error_internal'], r['error']);
@@ -1241,17 +1234,17 @@ export class DiffApprComponent<T, ID> extends Vue {
       return;
     }
     const com = this;
-    const st = this.status;
+    // const st = this.status;
     const r = this.resource;
     if (this.id) {
       this.running = true;
       showLoading(this.loading);
       this.service.reject(this.id).then(status => {
-        if (status === st.success) {
+        if (status > 0) {
           com.showMessage(r['msg_reject_success']);
-        } else if (status === st.version_error) {
+        } else if (status === 0) {
           com.showMessage(r['msg_approve_version_error']);
-        } else if (status === st.not_found) {
+        } else if (status < 0) {
           com.handleNotFound(com.form);
         } else {
           com.showError(r['error_internal'], r['error']);

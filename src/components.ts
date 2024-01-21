@@ -3,7 +3,7 @@ import { Attributes, DiffApprService, DiffParameter, error, ErrorMessage, Filter
 import { formatDiffModel, showDiff } from './diff';
 import { build, createModel, EditParameter, GenericService, handleVersion } from './edit';
 import { format, json } from './formatter';
-import { focusFirstError, readOnly } from './formutil';
+import { focusFirstError, setReadOnly } from './formutil';
 import { getConfirmFunc, getErrorFunc, getLoadingFunc, getLocaleFunc, getMsgFunc, getResource, getUIService } from './input';
 import { clone, makeDiff, trim, setValue } from './reflect';
 import { addParametersIntoUrl, append, buildMessage, changePage, changePageSize, formatResults, getFields, handleSortEvent, initFilter, mergeFilter, more, optimizeFilter, reset, showPaging } from './search';
@@ -146,7 +146,7 @@ export class ViewComponent<T, ID> extends Vue {
   protected handleNotFound(form?: any): void {
     const msg = message(this.resource, 'error_not_found', 'error');
     if (this.form) {
-      readOnly(this.form);
+      setReadOnly(this.form);
     }
     this.showError(msg.message, msg.title);
   }
@@ -227,11 +227,11 @@ export class BaseComponent extends Vue {
       }
       if (status === 403) {
         msg = r['error_forbidden'];
-        readOnly(this.form);
+        setReadOnly(this.form);
         this.showError(msg, title);
       } else if (status === 401) {
         msg = r['error_unauthorized'];
-        readOnly(this.form);
+        setReadOnly(this.form);
         this.showError(msg, title);
       } else {
         this.showError(msg, title);
@@ -463,7 +463,7 @@ export class EditComponent<T, ID> extends BaseComponent {
   }
   handleNotFound(form?: any) {
     if (form) {
-      readOnly(form);
+      setReadOnly(form);
     }
     const r = this.resource;
     const title = r['error'];
